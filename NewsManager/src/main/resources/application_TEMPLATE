@@ -1,0 +1,4 @@
+spring.application.name=NewsManager
+server.port=8080
+newsapi.org.API_KEY=Your API KEY
+newsdata.io.API_KEY=YOUR API KEY
