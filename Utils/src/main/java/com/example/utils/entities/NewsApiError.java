@@ -1,14 +1,14 @@
 package com.example.utils.entities;
 
-public class NewsError {
+public class NewsApiError {
 
     private String status;
     private String code;
     private String message;
 
-    NewsError() {}
+    NewsApiError() {}
 
-    public NewsError(String status, String code, String message) {
+    public NewsApiError(String status, String code, String message) {
         this.status = status;
         this.code = code;
         this.message = message;

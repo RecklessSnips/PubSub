@@ -2,6 +2,7 @@ package com.example.newssubscriber;
 
 import com.example.utils.Connector;
 import com.example.utils.news.News;
+import com.example.utils.news.NewsData;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;

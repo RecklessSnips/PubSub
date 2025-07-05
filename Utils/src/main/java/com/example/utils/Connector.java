@@ -2,6 +2,7 @@ package com.example.utils;
 
 import com.example.utils.news.News;
 import com.example.utils.news.NewsApi;
+import com.example.utils.news.NewsData;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -117,7 +118,7 @@ public class Connector implements DisposableBean {
     }
 
 
-    public void publishDirect(News newsApi){
+    public void publishDirect(News newsApi, String newsType){
         // Called when the publisher completes start
         directMessagePublisher.startAsync(
             // Every Async excepts a CompletionListener, and this is a Functional interface
@@ -136,6 +137,7 @@ public class Connector implements DisposableBean {
                     OutboundMessageBuilder outboundMessageBuilder = messagingService.messageBuilder();
                     // Construct the message
                     OutboundMessage message = outboundMessageBuilder
+                            .withProperty("News type", newsType)
                             .build(newsApi, newsConverter);
                     System.out.println("Sending message: ");
                     System.out.println(message.getPayloadAsString());
@@ -175,8 +177,17 @@ public class Connector implements DisposableBean {
                     directMessageReceiver.receiveAsync(
                         inboundMessage -> {
                             // Successfully received messages!
-                            BytesToObject<NewsApi> bytesToNewsConverter = getBytesToNewsConverter(NewsApi.class);
-                            News newsApi = inboundMessage.getAndConvertPayload(bytesToNewsConverter, NewsApi.class);
+                            System.out.println("Get class");
+                            String newsType = inboundMessage.getProperty("News type");
+                            News newsApi = null;
+                            // Different News type!
+                            if (newsType.equals("NewsData")) {
+                                BytesToObject<NewsData> bytesToNewsConverter = getBytesToNewsConverter(NewsData.class);
+                                newsApi = inboundMessage.getAndConvertPayload(bytesToNewsConverter, NewsData.class);
+                            } else if (newsType.equals("NewsAPI")) {
+                                BytesToObject<NewsApi> bytesToNewsConverter = getBytesToNewsConverter(NewsApi.class);
+                                newsApi = inboundMessage.getAndConvertPayload(bytesToNewsConverter, NewsApi.class);
+                            }
                             System.out.println("Receiver: ");
                             System.out.println("Message received!");
                             System.out.println(newsApi);
@@ -250,6 +261,7 @@ public class Connector implements DisposableBean {
         receiver.terminate(1500L);
     }
 
+    // Disconnect from the broker once the bean is destroyed
     @Override
     public void destroy() throws Exception {
         directMessagePublisher.terminate(1000L);

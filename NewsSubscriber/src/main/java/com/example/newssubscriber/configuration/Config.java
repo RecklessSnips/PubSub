@@ -11,9 +11,9 @@ public class Config {
     @Bean
     Connector connector(){
         return new Connector(
-                "tcps://mr-connection-7ejhmatgdjk.messaging.mymaas.net:55443",
+                "tcps://mr-connection-442yn86oasb.messaging.mymaas.net:55443",
                 "news",
                 "solace-cloud-client",
-                "3ns866r01o18uqgp5e552roptv");
+                "512k2kpo11favku651dv37lgmk");
     }
 }

@@ -1,5 +1,6 @@
 package com.example.newsmanager.newsManager.brokerImpl;
 
+import com.example.newsmanager.newsManager.ConnectionManager;
 import com.example.newsmanager.newsManager.NewsBroker;
 import com.example.newsmanager.openfeign.NewsAPICollector;
 import com.example.utils.Connector;
@@ -12,6 +13,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 @Component
@@ -19,12 +21,21 @@ public class NewsApiBroker extends NewsBroker {
 
     private final NewsAPICollector newsAPICollector;
 
+    // Default News language
+    private static final String LANGUAGE = "en";
+    // Used to distinguish the news when receiver processing it: receiveDirect()
+    private static final String TYPE = "NewsAPI";
+
+    // Decide later if to strict the country within US
+    private SortBy sortBy;
+
     public NewsApiBroker(
             @Autowired NewsAPICollector newsAPICollector,
-            @Autowired Connector connector,
+            @Autowired ConnectionManager connectionManager,
             @Value("${newsapi.org.API_KEY}") String API_KEY){
-        super(connector, API_KEY);
+        super(connectionManager.getConnector(), API_KEY);
         this.newsAPICollector = newsAPICollector;
+        this.sortBy = SortBy.PUBLISHAT;
     }
 
     // Publish news to the Event Broker
@@ -33,50 +44,126 @@ public class NewsApiBroker extends NewsBroker {
 
     }
 
-    @Override
-    public void search(String query){
-
-    }
-
-    @Override
-    public void searchByDomain(String source, String... excludeDomains) {
-        NewsApiResponse response = newsAPICollector.getEverything(API_KEY, source);
-        System.out.println("Response: ");
-        System.out.println(response.getArticles());
-        newsList.addAll(response.getArticles());
-    }
-
-    @Override
-    public void searchByDomains(List<String> domains, String... excludeDomains) {
-
-    }
-
-    @Override
-    public void searchByCategory(String category) {
-
-    }
-
-    @Override
-    public void searchByLanguage(String... lang) {
-
-    }
-
-    @PostConstruct
-    public void searchNews(){
-        searchByDomain("cnn.com", API_KEY);
-    }
 
     // Publish news to event broker
     public void publishNews(){
         // Randomly pick a new from the list
         int i = new Random().nextInt(newsList.size());
         News newsApi = newsList.get(i);
-        connector.publishDirect(newsApi);
+        connector.publishDirect(newsApi, TYPE);
     }
 
-    @Scheduled(fixedRate = 10000)
+    // ***************** Each of the method need to specify the query params in each method *************************
+    @Override
+    public void search(String query){
+        // Split the query into a list, then concatenate them using + sign
+        String[] split = query.trim().split(" ");
+        String formattedQuery = String.join("+", split);
+
+        NewsApiResponse response = newsAPICollector.getEverything(
+            Map.of("q", formattedQuery,
+                    "language", LANGUAGE,
+                    "sortBy", SortBy.POPULARITY.toString()),
+            API_KEY
+        );
+
+        System.out.println("Search by q: ");
+        System.out.println(response.getArticles());
+        newsList.addAll(getNewsList());
+    }
+
+    @Override
+    public void searchByDomains(List<String> source, String... excludeDomains) {
+        // Search by domains (reuters.com, nytimes.com won't work)
+        String sources = String.join(",", source);
+        String excludedDomains = String.join(",", excludeDomains);
+
+        NewsApiResponse response = newsAPICollector.getEverything(
+            Map.of("domains", sources,
+                    "excludeDomains", excludedDomains,
+                    "language", LANGUAGE,
+                    "sortBy", SortBy.POPULARITY.toString()),
+            API_KEY
+        );
+
+        System.out.println("Response: ");
+        newsList.addAll(response.getArticles());
+    }
+
+    // Only available in top-headlines endpoint, and in US
+    @Override
+    public void searchByCategory(String category) {
+        NewsApiResponse topHeadlines = newsAPICollector.getTopHeadlines(
+            Map.of("category", category,
+                    "language", LANGUAGE,
+                    "sortBy", SortBy.POPULARITY.toString()),
+            API_KEY
+        );
+
+        System.out.println("Response: ");
+        System.out.println(topHeadlines.getArticles());
+        newsList.addAll(topHeadlines.getArticles());
+    }
+
+    // Use this method to select a predefined category
+    public void searchByCategoryEnum(Category category) {
+        searchByCategory(category.toString());
+    }
+
+    // Set the sorting option
+    public void setSortBy(SortBy sortBy) {
+        this.sortBy = sortBy;
+    }
+
+    //******************* Running method *******************//
+    @PostConstruct
+    public void searchNews(){
+        searchByDomains(List.of("cnn.com"), API_KEY);
+    }
+
+
+    @Scheduled(fixedRateString = "1m")
     public void extractAndPublish(){
         publishNews();
     }
 
+    // Sorting options
+    public enum SortBy {
+        RELEVANCY("relevancy"),
+        POPULARITY("popularity"),
+        PUBLISHAT("publishedAt");
+
+        private String sortBy;
+
+        SortBy(String sortBy) {
+            this.sortBy = sortBy;
+        }
+
+        @Override
+        public String toString() {
+            return sortBy;
+        }
+    }
+
+    // Category
+    public enum Category {
+        BUSINESS("business"),
+        ENTERTAINMENT("entertainment"),
+        GENERAL("general"),
+        HEALTH("health"),
+        SCIENCE("science"),
+        SPORTS("sports"),
+        TECHNOLOGY("technology");
+
+        private String category;
+
+        Category(String category) {
+            this.category = category;
+        }
+
+        @Override
+        public String toString() {
+            return category;
+        }
+    }
 }

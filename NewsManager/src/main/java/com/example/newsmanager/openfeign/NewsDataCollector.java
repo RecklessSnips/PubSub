@@ -18,7 +18,7 @@ public interface NewsDataCollector {
     @GetMapping("/latest")
     NewsDataResponse getLatest(
 //            Pass in multiple headers or params
-            @RequestHeader Map<String, String> headers,
-            @RequestParam Map<String, String> queryParams
+            @RequestParam Map<String, String> queryParams,
+            @RequestHeader("X-ACCESS-KEY") String apiKey
     );
 }

@@ -23,7 +23,6 @@ public abstract class NewsBroker implements NewsCollector {
         this.connector = connector;
         this.API_KEY = API_KEY;
         this.newsList = new ArrayList<>();
-        connector.connect();
     }
 
     protected List<News> getNewsList(){

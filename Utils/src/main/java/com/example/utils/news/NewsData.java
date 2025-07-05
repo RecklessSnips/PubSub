@@ -19,6 +19,7 @@ public class NewsData extends News{
     private String zoneId;
 
     // The local time zone
+    @JsonProperty("localDateTime")
     private LocalDateTime localDateTime;
 
     @JsonProperty("source_id")
