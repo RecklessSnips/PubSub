@@ -2,6 +2,8 @@ package com.example.newssubscriber.controller;
 
 import com.example.newssubscriber.NewsSubscriber;
 import com.example.utils.news.News;
+import com.example.utils.news.NewsApi;
+import com.example.utils.news.NewsData;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -21,8 +23,32 @@ public class NewsController {
     }
 
     @GetMapping("/bbc")
-    public ResponseEntity<List<News>> getBBC(){
-        List<News> newsList = newsSubscriber.getNewsList();
+    public ResponseEntity<List<NewsApi>> getBBC(){
+        List<NewsApi> newsList = newsSubscriber.getNewsApiList("bbc");
+        return ResponseEntity.ok().body(newsList);
+    }
+
+    @GetMapping("/cnn")
+    public ResponseEntity<List<NewsApi>> getCNN(){
+        List<NewsApi> newsList = newsSubscriber.getNewsApiList("cnn");
+        return ResponseEntity.ok().body(newsList);
+    }
+
+    @GetMapping("/nytimes")
+    public ResponseEntity<List<NewsData>> getNYTimes(){
+        List<NewsData> newsList = newsSubscriber.getNewsDataList("nytimes");
+        return ResponseEntity.ok().body(newsList);
+    }
+
+    @GetMapping("/reuters")
+    public ResponseEntity<List<NewsData>> getReuters(){
+        List<NewsData> newsList = newsSubscriber.getNewsDataList("reuters");
+        return ResponseEntity.ok().body(newsList);
+    }
+
+    @GetMapping("/economist")
+    public ResponseEntity<List<NewsData>> getEconomist(){
+        List<NewsData> newsList = newsSubscriber.getNewsDataList("economist");
         return ResponseEntity.ok().body(newsList);
     }
 }

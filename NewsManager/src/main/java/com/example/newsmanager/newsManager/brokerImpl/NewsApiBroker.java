@@ -3,7 +3,7 @@ package com.example.newsmanager.newsManager.brokerImpl;
 import com.example.newsmanager.newsManager.ConnectionManager;
 import com.example.newsmanager.newsManager.NewsBroker;
 import com.example.newsmanager.openfeign.NewsAPICollector;
-import com.example.utils.Connector;
+import com.example.utils.exception.NewsException;
 import com.example.utils.news.News;
 import com.example.utils.response.NewsApiResponse;
 import jakarta.annotation.PostConstruct;
@@ -12,14 +12,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 @Component
 public class NewsApiBroker extends NewsBroker {
 
     private final NewsAPICollector newsAPICollector;
+    private List<News> bbc;
+    private List<News> cnn;
 
     // Default News language
     private static final String LANGUAGE = "en";
@@ -35,6 +37,8 @@ public class NewsApiBroker extends NewsBroker {
             @Value("${newsapi.org.API_KEY}") String API_KEY){
         super(connectionManager.getConnector(), API_KEY);
         this.newsAPICollector = newsAPICollector;
+        this.bbc = new ArrayList<>();
+        this.cnn = new ArrayList<>();
         this.sortBy = SortBy.PUBLISHAT;
     }
 
@@ -47,10 +51,10 @@ public class NewsApiBroker extends NewsBroker {
 
     // Publish news to event broker
     public void publishNews(){
-        // Randomly pick a new from the list
-        int i = new Random().nextInt(newsList.size());
-        News newsApi = newsList.get(i);
-        connector.publishDirect(newsApi, TYPE);
+        // Publish news from different sources to the Broker!
+        // Dynamic Topic!
+        connector.publishDirect(bbc.subList(0, 1), TYPE, "news/bbc");
+        connector.publishDirect(cnn.subList(0, 1), TYPE, "news/cnn");
     }
 
     // ***************** Each of the method need to specify the query params in each method *************************
@@ -75,19 +79,28 @@ public class NewsApiBroker extends NewsBroker {
     @Override
     public void searchByDomains(List<String> source, String... excludeDomains) {
         // Search by domains (reuters.com, nytimes.com won't work)
-        String sources = String.join(",", source);
         String excludedDomains = String.join(",", excludeDomains);
 
-        NewsApiResponse response = newsAPICollector.getEverything(
-            Map.of("domains", sources,
-                    "excludeDomains", excludedDomains,
-                    "language", LANGUAGE,
-                    "sortBy", SortBy.POPULARITY.toString()),
-            API_KEY
-        );
+        for (String s : source) {
+            NewsApiResponse response = newsAPICollector.getEverything(
+                    Map.of("domains", s,
+                            "excludeDomains", excludedDomains,
+                            "language", LANGUAGE,
+                            "sortBy", SortBy.POPULARITY.toString()),
+                    API_KEY
+            );
 
-        System.out.println("Response: ");
-        newsList.addAll(response.getArticles());
+            System.out.println("News API Search response: ");
+            System.out.println(response.getArticles().size());
+
+            if (s.equals("bbc.com")) {
+                bbc.addAll(response.getArticles());
+            } else if (s.equals("cnn.com")) {
+                cnn.addAll(response.getArticles());
+            } else {
+                throw new NewsException("Unsupported News source");
+            }
+        }
     }
 
     // Only available in top-headlines endpoint, and in US
@@ -118,11 +131,12 @@ public class NewsApiBroker extends NewsBroker {
     //******************* Running method *******************//
     @PostConstruct
     public void searchNews(){
-        searchByDomains(List.of("cnn.com"), API_KEY);
+        // Fetch news periodically
+        searchByDomains(List.of("cnn.com", "bbc.com"), API_KEY);
     }
 
 
-    @Scheduled(fixedRateString = "1m")
+    @Scheduled(fixedRateString = "2m")
     public void extractAndPublish(){
         publishNews();
     }

@@ -2,7 +2,11 @@ package com.example.utils.exception;
 
 public class NewsException extends RuntimeException{
 
-    private final String code;
+    private String code;
+
+    public NewsException(String message) {
+        super(message);
+    }
 
     public NewsException(String code, String message){
         super(message);

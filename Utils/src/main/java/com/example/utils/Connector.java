@@ -22,9 +22,11 @@ import com.solace.messaging.resources.Topic;
 import com.solace.messaging.resources.TopicSubscription;
 import com.solace.messaging.util.Converter.ObjectToBytes;
 import com.solace.messaging.util.Converter.BytesToObject;
+import com.solace.messaging.util.ManageablePublisher;
 import org.springframework.beans.factory.DisposableBean;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Properties;
 import java.util.function.Consumer;
 
@@ -65,7 +67,8 @@ public class Connector implements DisposableBean {
 
         directMessageReceiver = messagingService
                 .createDirectMessageReceiverBuilder()
-                .withSubscriptions(TopicSubscription.of("news"))
+                // Dynamic Topic! Accept everything on the next Topic level
+                .withSubscriptions(TopicSubscription.of("news/*"))
                 .build();
 
         // Persistent
@@ -80,6 +83,41 @@ public class Connector implements DisposableBean {
 
     public void connect() {
         messagingService.connect();  // blocking connect to the broker
+    }
+
+    // Make sure called after connect()
+    public void startDirectPublisher() {
+        // Start the publisher
+        directMessagePublisher.startAsync(
+                // Every Async excepts a CompletionListener, and this is a Functional interface
+                (publisher, throwable) -> {
+                    // If there's an error occurred during start
+                    if (throwable != null) {
+                        throw new RuntimeException(
+                                String.format("Failed to start directMessagePublisher due to: %s", throwable.getCause())
+                        );
+                    } else {
+                        // Start successfully, start publishing
+                        System.out.println("Publisher starts successfully!");
+                    }
+                }
+        );
+    }
+
+    // Make sure called after connect()
+    public void startDirectReceiver() {
+        // Start the receiver
+        directMessageReceiver.startAsync(
+                (receiver, throwable) -> {
+                    if (throwable != null) {
+                        throw new RuntimeException(
+                                String.format("Failed to start directMessageReceiver due to: %s", throwable.getCause())
+                        );
+                    } else {
+                        System.out.println("Receiver starts successfully!");
+                    }
+                }
+        );
     }
 
     public void disconnect() {
@@ -118,90 +156,73 @@ public class Connector implements DisposableBean {
     }
 
 
-    public void publishDirect(News newsApi, String newsType){
-        // Called when the publisher completes start
-        directMessagePublisher.startAsync(
-            // Every Async excepts a CompletionListener, and this is a Functional interface
-            (publisher, throwable) -> {
-                // If there's an error occurred during start
-                if (throwable != null){
-                    throw new RuntimeException(
-                        String.format("Failed to start directMessagePublisher due to: %s", throwable.getCause())
-                    );
-                }else {
-                    // Start successfully, start publishing
-                    System.out.println("Publisher starts successfully!");
-                    // Since News is an object, we need to convert into bytes to send to the Broker
-                    ObjectToBytes<News> newsConverter = getNewsToBytesConverter();
-                    // Create the message builder for best practise
-                    OutboundMessageBuilder outboundMessageBuilder = messagingService.messageBuilder();
-                    // Construct the message
-                    OutboundMessage message = outboundMessageBuilder
-                            .withProperty("News type", newsType)
-                            .build(newsApi, newsConverter);
-                    System.out.println("Sending message: ");
-                    System.out.println(message.getPayloadAsString());
+    // Publish a list of same source of news to a Topic
+    public void publishDirect(List<News> newsList, String newsType, String topic){
+        // Since News is an object, we need to convert into bytes to send to the Broker
+        ObjectToBytes<News> newsConverter = getNewsToBytesConverter();
+        // Create the message builder for best practise
+        OutboundMessageBuilder outboundMessageBuilder = messagingService.messageBuilder();
 
-                    // Set a failure listener
-                    directMessagePublisher.setPublishFailureListener(
-                        (failedPublishEvent) -> {
-                            System.out.println("Failed to send message: ");
-                            System.out.println(failedPublishEvent);
-                        }
-                    );
-                    try {
-                        directMessagePublisher.publish(message, Topic.of("news"));
-                    } catch (PubSubPlusClientException e) {
-                        throw new PubSubPlusClientException(e);
-                    } catch (IllegalStateException e) {
-                        throw new IllegalArgumentException(e);
-                    } catch (RuntimeException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
+        // Set a failure listener
+        directMessagePublisher.setPublishFailureListener(
+            (failedPublishEvent) -> {
+                System.out.println("Failed to send message: ");
+                System.out.println(failedPublishEvent);
             }
         );
+
+        for (News newsItem : newsList) {
+            // Construct the message
+            OutboundMessage message = outboundMessageBuilder
+                    .withProperty("News type", newsType)
+                    .build(newsItem, newsConverter);
+            System.out.println("📤 Sending message: ");
+            System.out.println(message.getPayloadAsString());
+
+            try {
+                directMessagePublisher.publish(message, Topic.of(topic));
+            } catch (PubSubPlusClientException e) {
+                throw new PubSubPlusClientException(e);
+            } catch (IllegalStateException e) {
+                throw new IllegalArgumentException(e);
+            } catch (RuntimeException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
     }
 
-    public void receiveDirect(Consumer<News> onNewsReceived) {
-        // Called when the receiver completes start
-        directMessageReceiver.startAsync(
-            (receiver, throwable) -> {
-                if (throwable != null){
-                    throw new RuntimeException(
-                        String.format("Failed to start directMessageReceiver due to: %s", throwable.getCause())
-                    );
-                }else {
-                    System.out.println("Receiver starts successfully!");
-                    // 这些async 都是异步线程，竞争执行
-                    directMessageReceiver.receiveAsync(
-                        inboundMessage -> {
-                            // Successfully received messages!
-                            System.out.println("Get class");
-                            String newsType = inboundMessage.getProperty("News type");
-                            News newsApi = null;
-                            // Different News type!
-                            if (newsType.equals("NewsData")) {
-                                BytesToObject<NewsData> bytesToNewsConverter = getBytesToNewsConverter(NewsData.class);
-                                newsApi = inboundMessage.getAndConvertPayload(bytesToNewsConverter, NewsData.class);
-                            } else if (newsType.equals("NewsAPI")) {
-                                BytesToObject<NewsApi> bytesToNewsConverter = getBytesToNewsConverter(NewsApi.class);
-                                newsApi = inboundMessage.getAndConvertPayload(bytesToNewsConverter, NewsApi.class);
-                            }
-                            System.out.println("Receiver: ");
-                            System.out.println("Message received!");
-                            System.out.println(newsApi);
+    // Keep receiving messages
+    public void receiveDirect(Consumer<NewsApi> onNewAPIReceived, Consumer<NewsData> onNewsDataReceived) {
+        // 这些async 都是异步线程，竞争执行
+        directMessageReceiver.receiveAsync(
+            inboundMessage -> {
+                // Successfully received messages!
+                String newsType = inboundMessage.getProperty("News type");
+                News news = null;
+                // Different News type!
+                System.out.println("💌Message received!");
 
-                            // Callback function, 用来将这个拿到的函数 return 出去
-                            onNewsReceived.accept(newsApi);
+                if (newsType.equals("NewsData")) {
+                    BytesToObject<NewsData> bytesToNewsConverter = getBytesToNewsConverter(NewsData.class);
+                    news = inboundMessage.getAndConvertPayload(bytesToNewsConverter, NewsData.class);
+                    // Receiver will save the news to the news data list
+                    onNewsDataReceived.accept((NewsData) news);
+                } else if (newsType.equals("NewsAPI")) {
+                    BytesToObject<NewsApi> bytesToNewsConverter = getBytesToNewsConverter(NewsApi.class);
+                    news = inboundMessage.getAndConvertPayload(bytesToNewsConverter, NewsApi.class);
+                    // Receiver will save the news to the news api list
+                    onNewAPIReceived.accept((NewsApi) news);
+                }
+                System.out.println(news);
+
+                // Callback function, 用来将这个拿到的函数 return 出去
+
 //                System.out.println("AppType: " + inboundMessage.getApplicationMessageType());
 //                System.out.println("SenderId: " + inboundMessage.getSenderId());
 //                System.out.println("Priority: " + inboundMessage.getPriority());
 //                System.out.println("SequenceNumber: " + inboundMessage.getSequenceNumber());
 //                System.out.println("Property[key]: " + inboundMessage.getProperty("key"));
-                        }
-                    );
-                }
             }
         );
     }
