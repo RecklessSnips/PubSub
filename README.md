@@ -12,6 +12,10 @@ This News PubSub project consists 5 repository with 4 microservices + 1 library:
 <img width="852" height="610" alt="NewsPubSub Workflow" src="https://github.com/user-attachments/assets/8d87464e-b8e4-4727-82ca-9c9edbf6d12d" />
 Note: Checkout comments in the code!!!
 
+## Frontend
+
+https://github.com/RecklessSnips/PubSub-UI
+
 ## Video
 
 https://drive.google.com/file/d/1MtZMuUqARbkJe2uo9zDpwUd70Ymzu8QC/view?usp=sharing
