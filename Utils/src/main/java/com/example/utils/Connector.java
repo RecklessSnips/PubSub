@@ -8,8 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.solace.messaging.MessagingService;
 import com.solace.messaging.PubSubPlusClientException;
+import com.solace.messaging.config.MissingResourcesCreationConfiguration;
 import com.solace.messaging.config.SolaceProperties;
-import com.solace.messaging.config.SolaceProperties.MessageProperties;
 import com.solace.messaging.config.profile.ConfigurationProfile;
 import com.solace.messaging.publisher.DirectMessagePublisher;
 import com.solace.messaging.publisher.OutboundMessage;
@@ -22,7 +22,6 @@ import com.solace.messaging.resources.Topic;
 import com.solace.messaging.resources.TopicSubscription;
 import com.solace.messaging.util.Converter.ObjectToBytes;
 import com.solace.messaging.util.Converter.BytesToObject;
-import com.solace.messaging.util.ManageablePublisher;
 import org.springframework.beans.factory.DisposableBean;
 
 import java.io.IOException;
@@ -30,19 +29,30 @@ import java.util.List;
 import java.util.Properties;
 import java.util.function.Consumer;
 
+/**
+ * This is a class of Solace Event Broker API I extracted from the Solace API
+ * <a href="https://docs.solace.com/Get-Started/get-started-lp.htm">Link</a>
+ * This class has the simplest function to publish / receive -> direct / persistent messages
+ */
 public class Connector implements DisposableBean {
 
-    private static final String TOPIC_PREFIX = "solace/samples/";  // used as the topic "root"
-    private static final String API = "Java";
-    private static final String QUEUE_NAME = "test";
-    private static volatile boolean hasDetectedRedelivery = false;
+    private static final String TOPIC_PREFIX = "subscriptions/";  // used as the topic "root"
+
+    // Create this beforehand!
+    private static final String QUEUE_NAME = "subscription";
+
+    // The guy talks to the Event Broker himself
     private final MessagingService messagingService;
+
+    // Publishers and Receivers
     private final DirectMessagePublisher directMessagePublisher;
-    private final PersistentMessagePublisher publisher;
     private final DirectMessageReceiver directMessageReceiver;
-    private final PersistentMessageReceiver receiver;
+    private final PersistentMessagePublisher persistentMessagePublisher;
+
+    private final PersistentMessageReceiver persistentMessageReceiver;
 
     public Connector(String host, String vpn, String username, String password) {
+        // Mandatory fields
         final Properties properties = new Properties();
         // host:port
         properties.setProperty(SolaceProperties.TransportLayerProperties.HOST, host);
@@ -56,6 +66,7 @@ public class Connector implements DisposableBean {
         properties.setProperty(SolaceProperties.TransportLayerProperties.RECONNECTION_ATTEMPTS, "20");
         properties.setProperty(SolaceProperties.TransportLayerProperties.CONNECTION_RETRIES_PER_HOST, "5");
 
+        // The service to connect with Solace Event Broker
         messagingService = MessagingService.builder(ConfigurationProfile.V1)
                 .fromProperties(properties)
                 .build();
@@ -71,14 +82,29 @@ public class Connector implements DisposableBean {
                 .withSubscriptions(TopicSubscription.of("news/*"))
                 .build();
 
+        /*
+            Solace 的 Queue是这样工作的：Topic to Queue
+            1. 首先 Publisher 需要制定一个目标 Topic，然后将消息发送到这个 Topic上，不需要制定 Queue
+            2. 然后 Receiver 需要绑定到一个 Queue，不需要制定 Topic
+            3. 但是 这个 Queue 必须要制定感兴趣的 Topic！手动指定
+            4. 然后 receiver 就会接收到这个 Queue 里所有感兴趣的 Topic 的消息
+
+            经验：
+            1. 尽量让 Queue exclusive，只能有一个消费者
+            2. 启动 Receiver 的 自动创建 Queue 的配置
+         */
+
         // Persistent
-        publisher = messagingService
+        persistentMessagePublisher = messagingService
                 .createPersistentMessagePublisherBuilder()
                 .build();
 
-        receiver = messagingService
-                .createPersistentMessageReceiverBuilder()
-                .build(Queue.durableExclusiveQueue(QUEUE_NAME));
+        persistentMessageReceiver = messagingService
+            .createPersistentMessageReceiverBuilder()
+            .withMissingResourcesCreationStrategy(
+                    // 如果 Broker 没有底下 build() 里配置的 Queue，启动时自动创建
+                    MissingResourcesCreationConfiguration.MissingResourcesCreationStrategy.CREATE_ON_START)
+            .build(Queue.durableExclusiveQueue(QUEUE_NAME));
     }
 
     public void connect() {
@@ -89,35 +115,26 @@ public class Connector implements DisposableBean {
     public void startDirectPublisher() {
         // Start the publisher
         directMessagePublisher.startAsync(
-                // Every Async excepts a CompletionListener, and this is a Functional interface
-                (publisher, throwable) -> {
-                    // If there's an error occurred during start
-                    if (throwable != null) {
-                        throw new RuntimeException(
-                                String.format("Failed to start directMessagePublisher due to: %s", throwable.getCause())
-                        );
-                    } else {
-                        // Start successfully, start publishing
-                        System.out.println("Publisher starts successfully!");
-                    }
+            // Every Async excepts a CompletionListener, and this is a Functional interface
+            (publisher, throwable) -> {
+                // If there's an error occurred during start
+                if (throwable != null) {
+                    throw new RuntimeException(
+                            String.format("Failed to start directMessagePublisher due to: %s", throwable.getCause())
+                    );
+                } else {
+                    // Start successfully, start publishing
+                    System.out.println("Publisher starts successfully!");
                 }
+            }
         );
     }
 
     // Make sure called after connect()
     public void startDirectReceiver() {
-        // Start the receiver
-        directMessageReceiver.startAsync(
-                (receiver, throwable) -> {
-                    if (throwable != null) {
-                        throw new RuntimeException(
-                                String.format("Failed to start directMessageReceiver due to: %s", throwable.getCause())
-                        );
-                    } else {
-                        System.out.println("Receiver starts successfully!");
-                    }
-                }
-        );
+        // Blocking start
+        directMessageReceiver.start();
+        System.out.println("DirectMessageReceiver starts successfully!");
     }
 
     public void disconnect() {
@@ -126,6 +143,7 @@ public class Connector implements DisposableBean {
         }
     }
 
+    // 负责将 News instance 转换成 Bytes 进行网络传输！
     public ObjectToBytes<News> getNewsToBytesConverter(){
         return newsApi -> {
             try{
@@ -142,6 +160,7 @@ public class Connector implements DisposableBean {
         };
     }
 
+    // 转换回来
     public <T extends News> BytesToObject<T> getBytesToNewsConverter(Class<T> clazz) {
         // bytes are the payload, will be called by Solace and convert them into News
         return bytes -> {
@@ -157,6 +176,7 @@ public class Connector implements DisposableBean {
 
 
     // Publish a list of same source of news to a Topic
+    // newsType 用来辨别是 NewsAPI 还是 NewsData 发布的，对于接收方有帮助
     public void publishDirect(List<News> newsList, String newsType, String topic){
         // Since News is an object, we need to convert into bytes to send to the Broker
         ObjectToBytes<News> newsConverter = getNewsToBytesConverter();
@@ -172,7 +192,7 @@ public class Connector implements DisposableBean {
         );
 
         for (News newsItem : newsList) {
-            // Construct the message
+            // Construct the message, extra properties allows granular control
             OutboundMessage message = outboundMessageBuilder
                     .withProperty("News type", newsType)
                     .build(newsItem, newsConverter);
@@ -192,9 +212,9 @@ public class Connector implements DisposableBean {
 
     }
 
-    // Keep receiving messages
+    // Keep receiving messages from the Topic "news/*"
     public void receiveDirect(Consumer<NewsApi> onNewAPIReceived, Consumer<NewsData> onNewsDataReceived) {
-        // 这些async 都是异步线程，竞争执行
+        // 启动一个 async 异步线程，只能被启动一次，用来接收消息
         directMessageReceiver.receiveAsync(
             inboundMessage -> {
                 // Successfully received messages!
@@ -204,91 +224,144 @@ public class Connector implements DisposableBean {
                 System.out.println("💌Message received!");
 
                 if (newsType.equals("NewsData")) {
+                    // 让 NewsData Callback 来处理
                     BytesToObject<NewsData> bytesToNewsConverter = getBytesToNewsConverter(NewsData.class);
                     news = inboundMessage.getAndConvertPayload(bytesToNewsConverter, NewsData.class);
                     // Receiver will save the news to the news data list
                     onNewsDataReceived.accept((NewsData) news);
                 } else if (newsType.equals("NewsAPI")) {
+                    // 让 NewsAPI Callback 来处理
                     BytesToObject<NewsApi> bytesToNewsConverter = getBytesToNewsConverter(NewsApi.class);
                     news = inboundMessage.getAndConvertPayload(bytesToNewsConverter, NewsApi.class);
                     // Receiver will save the news to the news api list
                     onNewAPIReceived.accept((NewsApi) news);
                 }
                 System.out.println(news);
+            }
+        );
 
-                // Callback function, 用来将这个拿到的函数 return 出去
+    }
 
-//                System.out.println("AppType: " + inboundMessage.getApplicationMessageType());
-//                System.out.println("SenderId: " + inboundMessage.getSenderId());
-//                System.out.println("Priority: " + inboundMessage.getPriority());
-//                System.out.println("SequenceNumber: " + inboundMessage.getSequenceNumber());
-//                System.out.println("Property[key]: " + inboundMessage.getProperty("key"));
+    /*
+        Persistent
+     */
+    public void startPersistentPublisher() {
+        persistentMessagePublisher.startAsync(
+            (onCompletionListener, throwable) -> {
+                if (throwable != null) {
+                    throw new RuntimeException(
+                            String.format("Failed to start persistentMessagePublisher due to: %s", throwable.getCause())
+                    );
+                } else {
+                    System.out.println("PersistentMessagePublisher starts successfully!");
+                }
             }
         );
     }
 
-    public void publishPersistent(String payload){
-        publisher.start();
-        Properties messageProps = new Properties();
-        messageProps.put(MessageProperties.PERSISTENT_ACK_IMMEDIATELY, "true");
-        OutboundMessageBuilder messageBuilder = messagingService.messageBuilder().fromProperties(messageProps);
+    public void startPersistentReceiver() {
+        persistentMessageReceiver.startAsync(
+            (onCompletionListener, throwable) -> {
+                if (throwable != null) {
+                    throw new RuntimeException(
+                            String.format("Failed to start persistentMessageReceiver due to: %s", throwable.getCause())
+                    );
+                } else {
+                    System.out.println("PersistentMessageReceiver starts successfully!");
+                }
+            }
+        );
+    }
+
+
+    /*
+     Payload 是新闻本身，topicSuffix 是 Topic 的路径，用来附着到最后一级的 Topic 路径上
+     而且 Queue 里是用 news/* 来匹配的，所以任何这一级的 News 都会被持久化到 Broker 上
+     */
+    public void publishPersistent(News payload, String topicSuffix){
+        // 建立 OutboundMessage
+        OutboundMessageBuilder messageBuilder = messagingService.messageBuilder();
+        ObjectToBytes<News> newsConverter = getNewsToBytesConverter();
+        String newsType = payload instanceof NewsApi ? "NewsAPI" : "NewsData";
+
         try{
-            OutboundMessage message = messageBuilder.build(payload.getBytes());
+            OutboundMessage message = messageBuilder
+                    .withProperty("News type", newsType)
+                    .build(payload, newsConverter);
+
+            System.out.println("📤 Sending persistent message: ");
+            System.out.println(message.getPayloadAsString());
+            // Specify Topic name, dynamic Topic!
             String topicString = new StringBuilder(TOPIC_PREFIX)
-                    .append(API.toLowerCase())
-                    .append("/pers/pub/")
-                    .append("test")
+                    .append("news/")
+                    .append(topicSuffix) // 这里
                     .toString();
             try {
-                publisher.publishAwaitAcknowledgement(message,Topic.of(topicString), 2000L);
+                persistentMessagePublisher.publish(message,Topic.of(topicString));
             } catch (PubSubPlusClientException e) {
-                System.out.printf("NACK for Message %s - %s%n", message, e);
-            } catch (InterruptedException e) {
-                System.out.println(e);
+                System.out.printf("Fail to publish message: %s - %s\n", message, e);
             }
-            System.out.println("Message sent successfully");
+            System.out.printf("Message %s sent successfully\n", payload);
         } catch (RuntimeException e) {
             System.out.printf("### Caught while trying to publisher.publish() %s\n",e);
-        } finally {
-            publisher.terminate(1500);
-            System.out.println("Publisher terminated.");
         }
     }
 
-    public void receivePersistent() throws InterruptedException, IOException {
-        try {
-            receiver.start();
-        } catch (RuntimeException e) {
-            System.err.printf("%n*** Could not establish a connection to queue '%s': %s%n", QUEUE_NAME, e.getMessage());
-            System.err.println("Create queue using PubSub+ Manager WebGUI, and add subscription "+ TOPIC_PREFIX+"*/pers/>");
-            System.err.println("  or see the SEMP CURL scripts inside the 'semp-rest-api' directory.");
-            System.err.println("NOTE: see HowToEnableAutoCreationOfMissingResourcesOnBroker.java sample for how to construct queue with consumer app.");
-            System.err.println("Exiting.");
-            return;
-        }
-
-        receiver.receiveAsync(message -> {
-            if (message.isRedelivered()) {
-                System.out.println("*** Redelivery detected ***");
-                hasDetectedRedelivery = true;
+    // JS 端自己处理接收，这里的 Receiver 是为了接收别的微服务发来的，暂时用不到
+    public void receivePersistent(Consumer<NewsApi> onNewAPIReceived, Consumer<NewsData> onNewsDataReceived) {
+        persistentMessageReceiver.receiveAsync(inboundMessage -> {
+            /*
+                Redelivery 说明queue中的消息被发给消费者，但是没有被成功接收
+                可能的原因：
+                1. 但没有 ack ，就会触发 redelivery
+                2. 消费者处理消息后崩溃, ack 没机会发出，Broker 以为失败
+                3. 如果 receiver 只是链接上，但没有任何行为，但这时候 publisher 依然发送了，
+                    broker 也会投递给 consumer，但是因为 receiver 没有任何消费意图，所以投递失败
+                    然后下一次再接收的时候就会触发 redelivery. 所以尽量保证 receiver 和 publisher
+                    同时在线！
+             */
+            if (inboundMessage.isRedelivered()) {
+                System.err.println("*** Redelivery detected, please call the ack() or check receiver connection. ***");
             }
-            String payload = new String(message.getPayloadAsBytes());
-            System.out.println("Received message payload: " + payload);
-            receiver.ack(message);
-        });
-        System.out.println("Waiting for messages... press Enter to exit.");
-        System.in.read();
+            // Successfully received messages!
+            String newsType = inboundMessage.getProperty("News type");
+            News news = null;
+            System.out.println("Persistent message type: ");
+            System.out.println(newsType);
 
-        receiver.terminate(1500L);
+            // Must acknowledge the message!
+            persistentMessageReceiver.ack(inboundMessage);
+
+            if (newsType.equals("NewsData")) {
+                BytesToObject<NewsData> bytesToNewsConverter = getBytesToNewsConverter(NewsData.class);
+                news = inboundMessage.getAndConvertPayload(bytesToNewsConverter, NewsData.class);
+                // Receiver will save the news to the news data list
+                onNewsDataReceived.accept((NewsData) news);
+            } else if (newsType.equals("NewsAPI")) {
+                BytesToObject<NewsApi> bytesToNewsConverter = getBytesToNewsConverter(NewsApi.class);
+                news = inboundMessage.getAndConvertPayload(bytesToNewsConverter, NewsApi.class);
+                // Receiver will save the news to the news api list
+                onNewAPIReceived.accept((NewsApi) news);
+            }
+            System.out.println(news);
+        });
     }
 
     // Disconnect from the broker once the bean is destroyed
     @Override
-    public void destroy() throws Exception {
+    public void destroy() {
         directMessagePublisher.terminate(1000L);
-        System.out.println("Publisher terminated");
+        System.out.println("Direct Publisher terminated");
+
         directMessageReceiver.terminate(1000L);
-        System.out.println("Receiver terminated");
+        System.out.println("Direct Receiver terminated");
+
+        persistentMessagePublisher.terminate(1500L);
+        System.out.println("Persistent Publisher terminated.");
+
+        persistentMessageReceiver.terminate(1500L);
+        System.out.println("Persistent Receiver terminated.");
+
         System.out.println("Disconnecting from event broker...");
         disconnect();
         System.out.println("Done");

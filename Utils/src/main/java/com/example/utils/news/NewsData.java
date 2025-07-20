@@ -2,11 +2,9 @@ package com.example.utils.news;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.Temporal;
 import java.util.List;
 
 public class NewsData extends News{

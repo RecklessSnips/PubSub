@@ -1,10 +1,6 @@
 package com.example.utils.news;
 
-import org.springframework.core.annotation.AliasFor;
-
 import java.io.Serializable;
-import java.time.Instant;
-import java.time.temporal.Temporal;
 
 // 抽象类，代表一篇新闻，只规定一篇新闻必须有的属性，它的不同子类会根据不同API来实现并添加更多的细节
 public class News implements Serializable {

@@ -15,7 +15,13 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.Collections;
 
+/**
+ * 这个类来发布 BBC，CNN 的新闻
+ * 所有方法，均参考 <a href="https://newsapi.org/docs/endpoints/everything">Link</a> 来编写
+ */
 @Component
 public class NewsApiBroker extends NewsBroker {
 
@@ -45,16 +51,17 @@ public class NewsApiBroker extends NewsBroker {
     // Publish news to the Event Broker
     @Override
     public void publish(){
-
-    }
-
-
-    // Publish news to event broker
-    public void publishNews(){
         // Publish news from different sources to the Broker!
         // Dynamic Topic!
-        connector.publishDirect(bbc.subList(0, 1), TYPE, "news/bbc");
-        connector.publishDirect(cnn.subList(0, 1), TYPE, "news/cnn");
+
+        Collections.shuffle(bbc);
+        Collections.shuffle(cnn);
+        int count = ThreadLocalRandom.current().nextInt(1, 2);
+        System.out.println("List size: ");
+        System.out.println(bbc.size());
+        // 取前 count 条新闻
+        connector.publishDirect(bbc.subList(0, count), TYPE, "news/bbc");
+        connector.publishDirect(cnn.subList(0, count), TYPE, "news/cnn");
     }
 
     // ***************** Each of the method need to specify the query params in each method *************************
@@ -83,11 +90,11 @@ public class NewsApiBroker extends NewsBroker {
 
         for (String s : source) {
             NewsApiResponse response = newsAPICollector.getEverything(
-                    Map.of("domains", s,
-                            "excludeDomains", excludedDomains,
-                            "language", LANGUAGE,
-                            "sortBy", SortBy.POPULARITY.toString()),
-                    API_KEY
+                Map.of("domains", s,
+                        "excludeDomains", excludedDomains,
+                        "language", LANGUAGE,
+                        "sortBy", SortBy.POPULARITY.toString()),
+                API_KEY
             );
 
             System.out.println("News API Search response: ");
@@ -136,9 +143,9 @@ public class NewsApiBroker extends NewsBroker {
     }
 
 
-    @Scheduled(fixedRateString = "2m")
+    @Scheduled(fixedRateString = "10s")
     public void extractAndPublish(){
-        publishNews();
+        publish();
     }
 
     // Sorting options

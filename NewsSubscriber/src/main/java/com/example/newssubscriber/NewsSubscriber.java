@@ -1,7 +1,6 @@
 package com.example.newssubscriber;
 
 import com.example.utils.Connector;
-import com.example.utils.news.News;
 import com.example.utils.news.NewsApi;
 import com.example.utils.news.NewsData;
 import jakarta.annotation.PostConstruct;
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Component
 public class NewsSubscriber {

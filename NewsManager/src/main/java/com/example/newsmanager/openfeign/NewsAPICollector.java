@@ -1,6 +1,5 @@
 package com.example.newsmanager.openfeign;
 
-
 import com.example.utils.response.NewsApiResponse;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.openfeign.FeignClient;

@@ -12,6 +12,8 @@ public class ConnectionManager {
         To make sure only connect to the Event Broker once
 
         Just for the Publisher yet, since there are 2 News Broker instance
+
+        ConnectionManager 只会实例化一次，并被注入到多个 NewsBroker 子类中（如 NewsApiBroker)
     */
 
     private final Connector connector;

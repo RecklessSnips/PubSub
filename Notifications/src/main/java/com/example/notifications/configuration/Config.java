@@ -1,4 +1,4 @@
-package com.example.newssubscriber.configuration;
+package com.example.notifications.configuration;
 
 import com.example.utils.Connector;
 import org.springframework.context.annotation.Bean;
@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class Config {
 
-    // Autowiring a connector to connect to the Solace Event Broker
     @Bean
     Connector connector(){
         return new Connector(

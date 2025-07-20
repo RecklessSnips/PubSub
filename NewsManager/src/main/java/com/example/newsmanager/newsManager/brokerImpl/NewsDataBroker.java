@@ -13,11 +13,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
+/**
+ * 这个类来发布 Reuters, NY Times, Economist 的新闻
+ * 所有方法，均参考 <a href="https://newsdata.io/documentation#latest-news">Link</a> 来编写
+ */
 @Component
 public class NewsDataBroker extends NewsBroker {
 
@@ -44,14 +46,19 @@ public class NewsDataBroker extends NewsBroker {
     // Publish news to Event Broker
     @Override
     public void publish(){
+        Collections.shuffle(reuters);
+        Collections.shuffle(nytimes);
+        Collections.shuffle(economist);
+
+        int count = ThreadLocalRandom.current().nextInt(1, 2);
         if (!reuters.isEmpty()) {
-            connector.publishDirect(reuters.subList(0, 1), TYPE, "news/reuters");
+            connector.publishDirect(reuters.subList(0, count), TYPE, "news/reuters");
         }
         if (!nytimes.isEmpty()) {
-            connector.publishDirect(nytimes.subList(0, 1), TYPE, "news/nytimes");
+            connector.publishDirect(nytimes.subList(0, count), TYPE, "news/nytimes");
         }
         if (!economist.isEmpty()) {
-            connector.publishDirect(economist.subList(0, 1), TYPE, "news/economist");
+            connector.publishDirect(economist.subList(0, count), TYPE, "news/economist");
         }
     }
 
@@ -89,8 +96,8 @@ public class NewsDataBroker extends NewsBroker {
             try {
                 NewsDataResponse news = newsDataCollector.getLatest(
                     Map.of(
-                            "domainurl", d,
-                            "language", LANGUAGE
+                        "domainurl", d,
+                        "language", LANGUAGE
                     ),
                     API_KEY
                 );
@@ -136,7 +143,7 @@ public class NewsDataBroker extends NewsBroker {
         searchByDomains(List.of("reuters.com", "nytimes.com", "economist.com"), API_KEY);
     }
 
-    @Scheduled(fixedRateString = "2m")
+    @Scheduled(fixedRateString = "10s")
     public void extractAndPublish() {
         publish();
     }

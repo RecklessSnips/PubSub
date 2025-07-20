@@ -20,6 +20,7 @@ public abstract class NewsBroker implements NewsCollector {
     protected List<News> newsList;
 
     protected NewsBroker(Connector connector, String API_KEY) {
+        // 让子类只是复用同一个 Connector 实例
         this.connector = connector;
         this.API_KEY = API_KEY;
         this.newsList = new ArrayList<>();

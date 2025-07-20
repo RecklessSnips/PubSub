@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
-    <artifactId>Notifications</artifactId>
+    <artifactId>SEMP</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>Notifications</name>
-    <description>Notifications</description>
+    <name>SEMP</name>
+    <description>SEMP</description>
     <url/>
     <licenses>
         <license/>
@@ -39,6 +39,14 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+
+<!--        SEMP-->
+        <dependency>
+            <groupId>com.example</groupId>
+            <artifactId>semp-client</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
 
         <!--        Importing from the util package     -->
         <dependency>

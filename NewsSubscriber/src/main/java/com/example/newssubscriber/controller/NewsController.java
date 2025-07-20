@@ -1,7 +1,6 @@
 package com.example.newssubscriber.controller;
 
 import com.example.newssubscriber.NewsSubscriber;
-import com.example.utils.news.News;
 import com.example.utils.news.NewsApi;
 import com.example.utils.news.NewsData;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +11,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.util.List;
 
+/**
+ * 嗯...这个类主要是为了在主页显示每个新闻种类的新闻的，但是不要也罢，因为主要还是关注
+ * Notifications 这个微服务的订阅功能 🥳
+ */
 @Controller
 @RequestMapping("/api/subscribe")
 public class NewsController {

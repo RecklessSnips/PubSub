@@ -2,10 +2,7 @@ package com.example.utils.news;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.temporal.Temporal;
 
 // Remember to keep no arg constructor and getters & setters for Jackson to convert
 // Implementing the Serializable to Solace's ObjectToBytes to convert
