@@ -9,7 +9,7 @@ This News PubSub project consists 5 repository with 4 microservices + 1 library:
 5. Utils: A shared utility library that provides common structures such as News, error types, API responses, and, most importantly, the Connector class. The Connector encapsulates the core logic and simplest way to interact with the Solace Event Broker API.
 
 ## Workflow
-![](/Users/ahsoka/Desktop/NewsPubSub Workflow.png)
+<img width="852" height="610" alt="NewsPubSub Workflow" src="https://github.com/user-attachments/assets/8d87464e-b8e4-4727-82ca-9c9edbf6d12d" />
 Note: Checkout comments in the code!!!
 
 ## Video
