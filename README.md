@@ -2,11 +2,11 @@
  
 This News PubSub project consists 5 repository with 4 microservices + 1 library:
 
-1. NewsManager: Responsible for extract News from the NewsAPI.org or NewsData.io periodically, and broadcast the News to the Solace Event Broker (Direct Publish). Right now only support for BBC, CNN, Reuters, NY Times, and Economist.
-2. NewsSubscriber: Responsible for listening to all the News and save them to display on the landing page (just for fun but not really useful).
-3. Notifications: The core microservice, responsible for subscriptions and broadcast the news to the client. The logic is that: always listen to the Broker, and whenever a News object is received, check it if the source of hte News is bing subscribed, if not, filter it out, if yes, publish to the Broker's Message Queue.
-4. SEMP: This is mainly for the Header component in the frontend, to display the unread messages in the Bell dropdown (as shown in the video).
-5. Utils: This is the library, it provides the News structure, error, API Response, and most importantly, the Connector class. This class has the essence, simplest way how to use Solace Event Broker's API.
+1. NewsManager: Responsible for extracting news from [NewsAPI.org](https://newsapi.org/) or [NewsData.io](https://newsapi.org/) periodically and broadcasting the news to the Solace Event Broker using direct publishing. Currently, it supports only BBC, CNN, Reuters, The New York Times, and The Economist.
+2. NewsSubscriber: Listens to all incoming news and stores them for display on the landing page. This is just for fun, not a big concern.
+3. Notifications: The core microservice. It handles user subscriptions and broadcasts relevant news to clients. The logic is as follows: it continuously listens to the broker, and upon receiving a News object, checks whether the source of the news is currently subscribed by any user. If not, it filters the news out; if yes, it publishes the news to the broker’s message queue.
+4. SEMP: Primarily used by the frontend’s Header component to display the number of unread messages in the notification bell dropdown (as shown in the demo video).
+5. Utils: A shared utility library that provides common structures such as News, error types, API responses, and, most importantly, the Connector class. The Connector encapsulates the core logic and simplest way to interact with the Solace Event Broker API.
 
 ## Workflow
 ![](/Users/ahsoka/Desktop/NewsPubSub Workflow.png)
