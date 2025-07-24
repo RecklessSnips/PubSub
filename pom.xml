@@ -27,6 +27,13 @@
         <url/>
     </scm>
     <packaging>pom</packaging>
+    <modules>
+        <module>NewsManager</module>
+        <module>NewsSubscriber</module>
+        <module>Notifications</module>
+        <module>SEMP</module>
+        <module>Utils</module>
+    </modules>
     <properties>
         <java.version>17</java.version>
     </properties>
