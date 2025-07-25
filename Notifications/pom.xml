@@ -6,11 +6,10 @@
         <groupId>com.example</groupId>
         <artifactId>NewsPubSub</artifactId>
         <version>0.0.1</version>
-        <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
     <artifactId>Notifications</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
     <name>Notifications</name>
     <description>Notifications</description>
     <url/>

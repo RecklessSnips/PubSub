@@ -1,0 +1,22 @@
+# Docker Compose 配置文件
+services:  # 定义多个服务，每个服务都会对应启动一个容器
+
+  newsmanager:  # 新闻采集服务，构建自 ./NewsManager 目录
+    build: ./NewsManager  # 构建上下文目录，必须包含 Dockerfile
+    ports:
+      - "8080:8080"  # 映射端口：宿主机:容器
+
+  newssubscriber:  # 新闻订阅者服务，构建自 ./NewsSubscriber 目录
+    build: ./NewsSubscriber
+    ports:
+      - "8081:8081"
+
+  notifications:  # 通知推送服务，构建自 ./Notifications 目录
+    build: ./Notifications
+    ports:
+      - "8082:8082"
+
+  semp:  # SEMP 管理服务，构建自 ./SEMP 目录
+    build: ./SEMP
+    ports:
+      - "8083:8083"
